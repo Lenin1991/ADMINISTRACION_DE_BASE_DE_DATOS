@@ -1,24 +1,24 @@
-/* =====================================================================
+/* 
    ADMINISTRACIÓN DE BASES DE DATOS · Unidad 1 · Tema 1
    Gestión de Concurrencia y Consistencia
    en el Sistema de Matriculación Universitaria
-   ---------------------------------------------------------------------
+   
    Motor   : Microsoft SQL Server 2016 SP1 o superior (T-SQL)
    Autor   : <Apellido Nombre>
    Archivo : 1 de 3  (esquema, datos, transacciones A/B/C, mejoras)
              2 de 3  02_Sesion_1.sql  (pruebas de aislamiento)
              3 de 3  03_Sesion_2.sql  (pruebas de aislamiento)
-   ---------------------------------------------------------------------
+  
    CÓMO EJECUTAR (SSMS):
    Selecciona cada bloque con el mouse y presiona F5. Ejecutar bloque
    por bloque permite tomar una captura del estado de la base de datos
    antes y después de cada operación.
-   ===================================================================== */
+                                                                     */
 
 
-/* =====================================================================
+/* 
    SECCIÓN 0 · CREACIÓN DE LA BASE DE DATOS
-   ===================================================================== */
+                                                                          */
 USE master;
 GO
 
@@ -46,13 +46,13 @@ USE MatriculacionUNACH;
 GO
 
 
-/* =====================================================================
+/* 
    SECCIÓN 1 · ESQUEMA Y RESTRICCIONES
-   ===================================================================== */
+                                                                       */
 
--- ---------------------------------------------------------------------
+
 -- 1.1 Estudiantes
--- ---------------------------------------------------------------------
+
 CREATE TABLE dbo.Estudiantes (
     estudiante_id  INT IDENTITY(1,1)  NOT NULL,
     nombre         NVARCHAR(100)      NOT NULL,
@@ -66,12 +66,12 @@ CREATE TABLE dbo.Estudiantes (
 );
 GO
 
--- ---------------------------------------------------------------------
+
 -- 1.2 Asignaturas
 -- El CHECK sobre cupos_disponibles es la última línea de defensa:
 -- aunque una aplicación tenga un error, el motor nunca aceptará un
 -- cupo negativo (sobreventa de cupos).
--- ---------------------------------------------------------------------
+
 CREATE TABLE dbo.Asignaturas (
     asignatura_id      INT IDENTITY(1,1) NOT NULL,
     nombre_materia     NVARCHAR(100)     NOT NULL,
@@ -84,9 +84,9 @@ CREATE TABLE dbo.Asignaturas (
 );
 GO
 
--- ---------------------------------------------------------------------
+
 -- 1.3 Registros_Matricula
--- ---------------------------------------------------------------------
+
 CREATE TABLE dbo.Registros_Matricula (
     registro_id     INT IDENTITY(1,1) NOT NULL,
     estudiante_id   INT               NOT NULL,
@@ -109,21 +109,21 @@ CREATE TABLE dbo.Registros_Matricula (
 );
 GO
 
--- ---------------------------------------------------------------------
+
 -- 1.4 Índice de apoyo (Tema 1.4)
 -- La restricción UNIQUE ya crea un índice que empieza por estudiante_id.
 -- Este índice cubre las búsquedas por asignatura ("¿quiénes están
 -- matriculados en Base de Datos?") y permite que SERIALIZABLE bloquee
 -- solo el rango de esa asignatura y no toda la tabla.
--- ---------------------------------------------------------------------
+
 CREATE NONCLUSTERED INDEX IX_Matricula_Asignatura
     ON dbo.Registros_Matricula (asignatura_id)
     INCLUDE (estado);
 GO
 
--- ---------------------------------------------------------------------
+
 -- 1.5 Datos iniciales (datos ficticios)
--- ---------------------------------------------------------------------
+
 INSERT INTO dbo.Estudiantes (nombre, cedula, facultad) VALUES
     (N'Ana Lucía Guamán',     '0600000001', N'Ingeniería'),
     (N'Carlos Andrés Yépez',  '0600000002', N'Ingeniería'),
@@ -145,11 +145,11 @@ SELECT * FROM dbo.Asignaturas;
 SELECT * FROM dbo.Registros_Matricula;   -- vacía
 GO
 
--- ---------------------------------------------------------------------
+
 -- 1.6 Vistas de monitoreo de concurrencia (se usan en la Sección 3)
 -- Requieren el permiso VIEW SERVER STATE (lo tiene un usuario
 -- administrador en una instalación local).
--- ---------------------------------------------------------------------
+
 CREATE OR ALTER VIEW dbo.vw_MonitorBloqueos
 AS
 SELECT
@@ -184,15 +184,15 @@ WHERE r.blocking_session_id <> 0;
 GO
 
 
-/* =====================================================================
+/* 
    SECCIÓN 2 · TRANSACCIONES CON PROPIEDADES ACID
-   ===================================================================== */
+                                                                       */
 
-/* ---------------------------------------------------------------------
+/* 
    TRANSACCIÓN A · USO DE COMMIT
    El Estudiante 1 se matricula en "Base de Datos".
    Resultado esperado: el registro existe y el cupo baja de 6 a 5.
-   --------------------------------------------------------------------- */
+                                                                   */
 
 -- A.0 Estado ANTES
 SELECT asignatura_id, nombre_materia, cupos_disponibles
@@ -239,11 +239,11 @@ SELECT @@TRANCOUNT AS transacciones_abiertas;       -- 0
 GO
 
 
-/* ---------------------------------------------------------------------
+/* 
    TRANSACCIÓN B · USO DE ROLLBACK
    El Estudiante 2 inicia su matrícula, ocurre un fallo a mitad de
    camino y se deshace todo. Ejecutar B.1, B.2 y B.3 POR SEPARADO.
-   --------------------------------------------------------------------- */
+                                                                     */
 
 -- B.1 Inicio de la transacción e INSERT
 SELECT COUNT(*) AS registros_antes FROM dbo.Registros_Matricula;   -- 1
@@ -284,7 +284,7 @@ SELECT IDENT_CURRENT('dbo.Registros_Matricula') AS ultimo_identity_generado;   -
 GO
 
 
-/* ---------------------------------------------------------------------
+/* 
    TRANSACCIÓN C · MATRÍCULA MULTIMATERIA (ATOMICIDAD)
    Tres materias en una sola transacción. La tercera usa un ID que no
    existe (999); al fallar, las dos primeras deben deshacerse.
@@ -293,7 +293,7 @@ GO
    produce error, simplemente afecta 0 filas. Si no se valida
    @@ROWCOUNT, la transacción haría COMMIT de una matrícula incompleta.
    Por eso se valida y se lanza el error con THROW.
-   --------------------------------------------------------------------- */
+                                                                       */
 
 -- C.0 Estado ANTES
 SELECT asignatura_id, nombre_materia, cupos_disponibles
@@ -376,16 +376,16 @@ FROM dbo.Asignaturas;                   -- Base de Datos = 5, Programación Avan
 GO
 
 
-/* =====================================================================
+/*  
    SECCIÓN 4 · VALOR AGREGADO
    (La Sección 3, niveles de aislamiento, está en los archivos
     02_Sesion_1.sql y 03_Sesion_2.sql)
-   ===================================================================== */
+                                                                        */
 
--- ---------------------------------------------------------------------
+-- 
 -- 4.1 Prueba del CHECK: el motor rechaza un cupo negativo
 -- Resultado esperado: Msg 547, conflicto con CK_Asignaturas_cupos.
--- ---------------------------------------------------------------------
+-- 
 BEGIN TRY
     UPDATE dbo.Asignaturas
     SET cupos_disponibles = -1
@@ -399,7 +399,7 @@ SELECT asignatura_id, nombre_materia, cupos_disponibles
 FROM dbo.Asignaturas WHERE asignatura_id = 5;   -- sigue en 1
 GO
 
--- ---------------------------------------------------------------------
+-- 
 -- 4.2 Procedimiento almacenado de matrícula segura
 -- Combina lo visto en la tarea:
 --   * Atomicidad: TRY/CATCH + XACT_ABORT, todo o nada.
@@ -409,7 +409,7 @@ GO
 --     pueden tomar el mismo último cupo, sin necesidad de SERIALIZABLE.
 --   * Integridad: si el INSERT falla (estudiante duplicado o
 --     inexistente), el cupo descontado se devuelve automáticamente.
--- ---------------------------------------------------------------------
+-- 
 CREATE OR ALTER PROCEDURE dbo.sp_MatricularEstudiante
     @estudiante_id INT,
     @asignatura_id INT

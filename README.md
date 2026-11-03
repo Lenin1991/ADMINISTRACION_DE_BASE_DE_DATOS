@@ -68,4 +68,55 @@ Asignaturas (asignatura_id PK, nombre_materia UNIQUE, docente,
 
 ---
 
+## Unidad 1 · Tema 2: Vistas, funciones, procedimientos y triggers en el sistema de matrículas
+
+Sobre el mismo modelo de matrícula se agregan objetos programables para consultar la oferta, calcular costos, inscribir y retirar materias de forma atómica y auditar automáticamente cada cambio.
+
+### Archivo
+
+| Archivo | Contenido |
+| --- | --- |
+| [`Unidad1_Tema2/Tema2_Programacion_SQL.sql`](Unidad1_Tema2/Tema2_Programacion_SQL.sql) | Script autocontenido: crea la base `MatriculacionUNACH_T2`, las tablas, 3 vistas, 3 funciones, 3 procedimientos y 3 triggers, carga los datos e incluye las pruebas de éxito, de error y de seguridad. |
+
+### Objetos implementados
+
+| Tipo | Objeto | Qué hace |
+| --- | --- | --- |
+| Tabla | `Auditoria_Matriculas` | Bitácora de MATRICULACIÓN y RETIRO con login, usuario de BD, fecha, equipo y aplicación. |
+| Tabla | `Historial_Cupos` | Cambios manuales de cupo (anterior → nuevo, fecha y usuario). |
+| Vista | `Vista_OfertaAcademica` | Materias con cupo, docente y porcentaje de ocupación. |
+| Vista | `Vista_DetalleMatricula` | Estudiante, facultad, materia, docente y fecha. |
+| Vista | `Vista_EstudiantesSaturados` | Estudiantes con más de 5 materias. |
+| Función escalar | `fn_CalcularCostoMatricula` | `DECIMAL(10,2)`: USD 15,00 por materia confirmada. |
+| Función escalar | `fn_VerificarDisponibilidad` | `BIT`: 1 si hay cupo, 0 si no hay o la materia no existe. |
+| Función de tabla en línea | `fn_ListaClase` | Lista de clase (nombre, cédula, facultad) de una asignatura. |
+| Procedimiento | `sp_InscribirAsignatura` | Valida, bloquea la fila con `UPDLOCK`, inserta y descuenta el cupo en una transacción con `TRY/CATCH` y `XACT_ABORT`. |
+| Procedimiento | `sp_RetirarAsignatura` | Elimina la matrícula, devuelve el cupo y registra el RETIRO. |
+| Procedimiento | `sp_ReporteCargaDocente` | Materias, estudiantes y promedio por docente, con filtro opcional. |
+| Trigger | `tr_AuditoriaMatricula_Insert` | `AFTER INSERT`: audita cada matrícula (procesa todas las filas a la vez). |
+| Trigger | `tr_ValidarCupoNegativo` | `INSTEAD OF UPDATE`: rechaza toda la instrucción si algún cupo quedaría negativo (error 50020). |
+| Trigger | `tr_LogCambioCupo` | `AFTER UPDATE`: registra solo los cambios manuales; ignora los de los procedimientos mediante `SESSION_CONTEXT`. |
+
+### Cómo ejecutarlo
+
+1. Abre `Tema2_Programacion_SQL.sql` en SSMS.
+2. Selecciona desde el inicio hasta el final de la **Sección 6** y presiona `F5`. Debe devolver `20 | 20 | 0` (matrículas, auditoría, historial).
+3. Ejecuta las secciones 7, 8 y 9 **bloque por bloque** (cada prueba termina en `GO`).
+
+### Resultados obtenidos (SQL Server 2025, v17.0)
+
+| Prueba | Resultado |
+| --- | --- |
+| Vistas | Oferta sin Seminario (0 cupos); 20 matrículas en el detalle; solo Ana Lucía (6 materias) aparece como saturada. |
+| Funciones | Costos de 90.00 a 0.00 (tipo `decimal(10,2)`); disponibilidad 0 en Seminario y en la asignatura 999; lista de clase usable con `CROSS APPLY`. |
+| Inscripción y retiro | Cupo de Redes 17 → 16 → 17; la auditoría registra MATRICULACIÓN (trigger) y RETIRO (procedimiento). |
+| Cambio manual de cupo | Base de Datos 26 → 35 queda en `Historial_Cupos`; las 22 operaciones de los procedimientos no se duplican allí. |
+| Errores de los procedimientos | 50011 sin cupo, 50012 duplicado, 50010 asignatura inexistente, 50013 estudiante inexistente, 50014 retiro inexistente. |
+| Trigger de cupo negativo | Error 50020 al dejar Seminario en −1; un `UPDATE` masivo de −15 se rechaza completo (no cambia ninguna materia). |
+| Atomicidad | Tras los errores: 20 matrículas, 22 filas de auditoría, 1 en el historial y `@@TRANCOUNT = 0`. |
+| Seguridad por roles | El usuario de la aplicación recibe el error 229 al insertar en la tabla, pero matricula con el procedimiento (ownership chaining). |
+| Inyección SQL | `'8; DROP TABLE dbo.Estudiantes;--'` produce el error 8114 (conversión a `int`); la tabla sigue con 8 estudiantes. |
+
+---
+
 **Autor:** Lenin Vladimir · Administración de Bases de Datos

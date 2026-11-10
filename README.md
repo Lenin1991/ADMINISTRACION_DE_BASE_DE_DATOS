@@ -119,4 +119,36 @@ Sobre el mismo modelo de matrícula se agregan objetos programables para consult
 
 ---
 
+## Unidad 2 · Tema 1: Fundamentos de recuperación (AA3)
+
+Base `RecuperacionLogistica` de una empresa de comercio electrónico: consistencia de datos, control de concurrencia entre dos operadores, cadena de respaldos (Full, Diferencial y Log) y un plan de recuperación probado con una restauración a un punto en el tiempo.
+
+### Archivos
+
+| Archivo | Contenido |
+| --- | --- |
+| [`Unidad2_Tema1/01_RecuperacionLogistica.sql`](Unidad2_Tema1/01_RecuperacionLogistica.sql) | Secciones 1, 2, 4 y 5: base y tablas, restricciones y trigger, pruebas válidas e inválidas, respaldos, incidente simulado, restauración de prueba y función de tabla del anexo. |
+| [`Unidad2_Tema1/02_Operador_A.sql`](Unidad2_Tema1/02_Operador_A.sql) | Sección 3, ventana del operador A (transacciones de modificación y de reporte). |
+| [`Unidad2_Tema1/03_Operador_B.sql`](Unidad2_Tema1/03_Operador_B.sql) | Sección 3, ventana del operador B (lecturas y cambios concurrentes, con `LOCK_TIMEOUT` de 5 s). |
+
+### Cómo ejecutarlo
+
+1. Ejecuta las secciones 1 y 2 de `01_RecuperacionLogistica.sql`.
+2. Abre `02` y `03` en **dos pestañas** de SSMS y ejecuta los pasos en este orden: A1 → B1 → A2 → A3 → B3 → A4+A5 → B5 → A6 → A7 → B7 → A8 → A9 → B9 → A10 → B11.
+3. Ejecuta las secciones 4 y 5 de `01` **bloque por bloque y en la misma pestaña** (la hora segura del incidente se guarda en una tabla temporal global de esa sesión).
+
+### Resultados obtenidos (SQL Server 2025 Developer, v17.0)
+
+| Bloque | Resultado |
+| --- | --- |
+| Consistencia | 7 intentos inválidos bloqueados: peso negativo y cero, costo cero, sucursal 99 y borrar una sucursal con paquetes (error 547); Cuenca llena (trigger, error 50001); una transacción de 3 filas con una inválida no deja ninguna. |
+| Lectura sucia | Con `READ UNCOMMITTED`, B leyó 999.99 / DEVUELTO, un valor que A luego revirtió; con `READ COMMITTED`, B esperó 5 006 ms y recibió el error 1222. |
+| Lectura no repetible | Con `READ COMMITTED`, el reporte de Quito pasó de 45.40 a 65.40 dentro de la misma transacción. |
+| Fantasma | Con `REPEATABLE READ`, B no pudo cambiar costos (1222), pero insertó un paquete y el reporte pasó de 4 a 5 filas. |
+| `SERIALIZABLE` | 6 bloqueos `RangeS-S`: B no pudo insertar en Quito (1222), sí en Guayaquil, y ambas lecturas de A fueron idénticas. |
+| Respaldos | Full 5 264 KB → 825 KB comprimido; Diferencial 1 616 → 221 KB; Log 1 140 → 41 KB; Log 2 76 → 18 KB. Los cuatro superan `RESTORE VERIFYONLY`. |
+| Restauración | Full + Diferencial + Log 1 + Log 2 con `STOPAT` en una base de prueba en 13,1 s: recupera los 7 paquetes borrados por error y conserva la operación legítima previa; `DBCC CHECKDB` sin errores. |
+
+---
+
 **Autor:** Lenin Vladimir · Administración de Bases de Datos

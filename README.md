@@ -149,6 +149,33 @@ Base `RecuperacionLogistica` de una empresa de comercio electrónico: consistenc
 | Respaldos | Full 5 264 KB → 825 KB comprimido; Diferencial 1 616 → 221 KB; Log 1 140 → 41 KB; Log 2 76 → 18 KB. Los cuatro superan `RESTORE VERIFYONLY`. |
 | Restauración | Full + Diferencial + Log 1 + Log 2 con `STOPAT` en una base de prueba en 13,1 s: recupera los 7 paquetes borrados por error y conserva la operación legítima previa; `DBCC CHECKDB` sin errores. |
 
+## Unidad 2 · Tema 2 (AA4): Recuperación en gestores de BD
+
+Caso: farmacia «Salud Andina» (Riobamba), mismas 4 tablas en **SQL Server 2025** y **PostgreSQL 19**: logs de transacciones, UNDO/REDO, log shipping, conmutación por falla y recuperación a un punto en el tiempo (PITR).
+
+### Archivos
+
+| Archivo | Contenido |
+| --- | --- |
+| [`Unidad2_Tema2/01_SQLServer_FarmaciaDB.sql`](Unidad2_Tema2/01_SQLServer_FarmaciaDB.sql) | Base FarmaciaDB (modelo FULL), lectura del log con `fn_dblog`, UNDO y REDO, log shipping manual con `STANDBY`, PITR con `STOPAT` y conmutación con respaldo de la cola del log. |
+| [`Unidad2_Tema2/02_SQLServer_Sesion_B.sql`](Unidad2_Tema2/02_SQLServer_Sesion_B.sql) | Segunda pestaña de SSMS: transacción sin confirmar para demostrar el UNDO en la restauración. |
+| [`Unidad2_Tema2/03_PostgreSQL_farmacia_db.sql`](Unidad2_Tema2/03_PostgreSQL_farmacia_db.sql) | Base farmacia_db, archivado del WAL, lectura con `pg_walinspect`, UNDO, borrado erróneo, búsqueda forense y reparación desde la instancia restaurada. |
+| [`Unidad2_Tema2/04_PostgreSQL_consola.txt`](Unidad2_Tema2/04_PostgreSQL_consola.txt) | Comandos de PowerShell: reinicio del servicio, `pg_basebackup` y restauración con `recovery_target_time`. |
+
+### Cómo ejecutarlo
+
+1. SQL Server: ejecuta `01` bloque por bloque; en el paso B1 abre `02` en otra pestaña y deja la transacción abierta hasta el paso B2.
+2. PostgreSQL: ejecuta `03` en el Query Tool de pgAdmin (cada `ALTER SYSTEM` por separado) y, en los puntos marcados `[CONSOLA]`, los comandos de `04` en PowerShell.
+
+### Resultados obtenidos
+
+| Bloque | Resultado |
+| --- | --- |
+| UNDO / REDO | SQL Server: 8 compensaciones + `LOP_ABORT_XACT`; restauración con 102 transacciones rehechas y 1 deshecha. PostgreSQL: transacción 678 `aborted`. |
+| Log shipping | Secundaria en `STANDBY` sincronizada (9 ventas / 118,00 USD), solo lectura (error 3906); conmutación en 0,65 s sin pérdida de datos. |
+| PITR SQL Server | `DELETE` de 9 filas replicado por el log shipping; `STOPAT` a 23:16:23.750 en 1,5 s recupera las 15 líneas. |
+| PITR PostgreSQL | `recovery_target_time` = 23:41:37.246426-05 con `inclusive = false`: se detiene antes de la transacción 680, timeline 2, 12 líneas recuperadas. |
+
 ---
 
 **Autor:** Lenin Vladimir · Administración de Bases de Datos

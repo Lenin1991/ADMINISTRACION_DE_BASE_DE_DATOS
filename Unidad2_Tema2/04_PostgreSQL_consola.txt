@@ -1,0 +1,73 @@
+=======================================================================
+ AA4 · PostgreSQL · COMANDOS DE CONSOLA (PowerShell en Windows)
+ Se ejecutan en los puntos marcados [CONSOLA] del archivo
+ 03_PostgreSQL_farmacia_db.sql. Requieren la contraseña del usuario
+ postgres, por eso los escribe el propio usuario.
+=======================================================================
+
+-----------------------------------------------------------------------
+ C1 · Reiniciar el servicio para activar el archivado del WAL
+      (PowerShell COMO ADMINISTRADOR; solo este paso)
+-----------------------------------------------------------------------
+Restart-Service postgresql-x64-19
+Get-Service postgresql-x64-19
+
+
+-----------------------------------------------------------------------
+ C2 · Copia base (backup físico) con pg_basebackup
+      (PowerShell normal, SIN administrador)
+-----------------------------------------------------------------------
+& "C:\Program Files\PostgreSQL\19\bin\pg_basebackup.exe" -h localhost -U postgres `
+    -D C:\PG_Respaldo\base -Fp -Xs -P -c fast -l "Base farmacia_db"
+
+#   -Fp  copia en formato de carpeta (plain)
+#   -Xs  incluye el WAL generado durante la copia (stream)
+#   -c fast  fuerza un checkpoint inmediato
+Get-ChildItem C:\PG_Respaldo\base | Select-Object -First 12 Name
+
+
+-----------------------------------------------------------------------
+ C3 · Restauración a un punto en el tiempo en una instancia aparte
+      (PowerShell normal, SIN administrador)
+      Reemplazar HORA_DEL_COMMIT por la hora que mostró el paso P7,
+      (en la práctica: 2026-11-22 23:41:37.246426-05)
+      NOTA: se usa el puerto 5434 porque el 5433 ya lo ocupaba otra
+      instancia de PostgreSQL instalada por Stack Builder.
+-----------------------------------------------------------------------
+$hora = 'HORA_DEL_COMMIT'
+
+Copy-Item C:\PG_Respaldo\base C:\PG_Restaurado -Recurse
+
+Add-Content C:\PG_Restaurado\postgresql.auto.conf 'port = 5434'
+Add-Content C:\PG_Restaurado\postgresql.auto.conf 'archive_mode = off'
+Add-Content C:\PG_Restaurado\postgresql.auto.conf 'restore_command = ''copy "C:\\PG_Archivo\\%f" "%p"'''
+Add-Content C:\PG_Restaurado\postgresql.auto.conf "recovery_target_time = '$hora'"
+Add-Content C:\PG_Restaurado\postgresql.auto.conf 'recovery_target_inclusive = false'
+Add-Content C:\PG_Restaurado\postgresql.auto.conf 'recovery_target_action = ''promote'''
+New-Item C:\PG_Restaurado\recovery.signal -ItemType File
+
+Get-Content C:\PG_Restaurado\postgresql.auto.conf
+
+& "C:\Program Files\PostgreSQL\19\bin\pg_ctl.exe" -D C:\PG_Restaurado -l C:\PG_Restaurado\arranque.log start
+
+# Registro de la recuperación
+Get-ChildItem C:\PG_Restaurado\log | Sort-Object LastWriteTime | Select-Object -Last 1 | Get-Content |
+    Select-String "recovery|recuperaci|restored|restaurado|redo|timeline|ready|listo"
+
+#   restore_command            : de dónde trae los segmentos WAL archivados
+#   recovery_target_time       : instante hasta el que se reaplica el WAL (REDO)
+#   recovery_target_inclusive  : false = se detiene ANTES de esa transacción
+#   recovery_target_action     : promote = al llegar, abre la base para escritura
+#   recovery.signal            : indica a PostgreSQL que debe iniciar en modo recuperación
+#   (En PostgreSQL 12 o superior ya no existe recovery.conf: estos
+#    parámetros van en postgresql.conf / postgresql.auto.conf.)
+
+#   Luego, en pgAdmin: registrar un servidor nuevo
+#     Nombre: PostgreSQL 19 - Restaurado · Host: localhost · Puerto: 5434
+#     Usuario: postgres · contraseña (marcar "Save password")
+
+
+-----------------------------------------------------------------------
+ C4 · Al terminar: detener la instancia restaurada
+-----------------------------------------------------------------------
+& "C:\Program Files\PostgreSQL\19\bin\pg_ctl.exe" -D C:\PG_Restaurado stop

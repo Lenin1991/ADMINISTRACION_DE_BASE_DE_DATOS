@@ -2,7 +2,7 @@
  AA4 · PostgreSQL · COMANDOS DE CONSOLA (PowerShell en Windows)
  Se ejecutan en los puntos marcados [CONSOLA] del archivo
  03_PostgreSQL_farmacia_db.sql. Requieren la contraseña del usuario
- postgres, por eso los escribe el propio usuario.
+ postgres.
 =======================================================================
 
 -----------------------------------------------------------------------
